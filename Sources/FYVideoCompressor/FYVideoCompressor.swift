@@ -6,7 +6,7 @@ public class FYVideoCompressor {
     public enum VideoCompressorError: Error, LocalizedError {
         case noVideo
         case compressedFailed(_ error: Error)
-
+        
         public var errorDescription: String? {
             switch self {
             case .noVideo:
@@ -16,7 +16,7 @@ public class FYVideoCompressor {
             }
         }
     }
-
+    
     /// Quality configuration. VideoCompressor will compress video by decreasing fps and bitrate.
     /// Bitrate has a minimum value: `minimumVideoBitrate`, you can change it if need.
     /// The video will be compressed using H.264, audio will be compressed using AAC.
@@ -24,19 +24,19 @@ public class FYVideoCompressor {
         /// Scale video size proportionally, not large than 224p and
         /// reduce fps and bit rate if need.
         case lowQuality
-
+        
         /// Scale video size proportionally, not large than 480p and
         /// reduce fps and bit rate if need.
-        case mediumQuality //
+        case mediumQuality
         
         /// Scale video size proportionally, not large than 1080p and
         /// reduce fps and bit rate if need.
         case highQuality
-
+        
         /// reduce fps and bit rate if need.
-        /// Scale video size with specified `scale`
+        /// Scale video size with specified `scale`.
         case custom(fps: Float = 24, bitrate: Int = 1000_000, scale: CGSize)
-
+        
         /// fps and bitrate.
         /// Considering that the video size taken by mobile phones is reversed, we don't hard code scale value.
         var value: (fps: Float, bitrate: Int) {
@@ -51,7 +51,7 @@ public class FYVideoCompressor {
                 return (fps, bitrate)
             }
         }
-                
+        
     }
     
     // Compression Encode Parameters
@@ -67,7 +67,7 @@ public class FYVideoCompressor {
         let audioSampleRate: Int
         
         let audioBitrate: Int
-
+        
         let fileType: AVFileType
         
         /// Scale (resize) the input video
@@ -75,7 +75,7 @@ public class FYVideoCompressor {
         /// 2. If you want to keep the aspect ratio, you need to specify only one component, either width or height, and set the other component to -1
         ///    e.g CGSize(width: 320, height: -1)
         let scale: CGSize?
-
+        
         /// size: nil
         /// videoBitrate: 1Mbps
         /// videomaxKeyFrameInterval: 10
@@ -98,6 +98,7 @@ public class FYVideoCompressor {
     private lazy var audioCompressQueue = DispatchQueue.init(label: "com.audio.compress_queue")
     private var reader: AVAssetReader?
     private var writer: AVAssetWriter?
+    private var compressVideoPaths: [URL] = []
     
     static public let shared: FYVideoCompressor = FYVideoCompressor()
     
@@ -105,7 +106,7 @@ public class FYVideoCompressor {
     }
     
     static public var minimumVideoBitrate = 1000 * 400 // youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps
-        
+    
     public func compressVideo(_ url: URL, quality: VideoQuality = .mediumQuality, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
@@ -116,10 +117,10 @@ public class FYVideoCompressor {
         // --- Video ---
         // video bit rate
         let targetVideoBitRate = quality.value.bitrate
-
+        
         // scale size
         let scaleSize = calculateSizeWith(originalSize: videoTrack.naturalSize, quality: quality)
-
+        
         let videoSettings = createVideoSettingsWithBitrate(targetVideoBitRate,
                                                            maxKeyFrameInterval: 10,
                                                            size: scaleSize)
@@ -140,16 +141,16 @@ public class FYVideoCompressor {
         print("########## Video ##########")
         print("ORIGINAL:")
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
-
+        
         print("size: \(videoTrack.naturalSize)")
-
+        
         print("TARGET:")
         print("video bitrate: \(targetVideoBitRate) b/s")
         print("size: (\(scaleSize))")
 #endif
         _compress(asset: asset, fileType: .mp4, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: quality.value.fps, completion: completion)
     }
-
+    
     public func compressVideo(_ url: URL, config: CompressionConfig = .default, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
@@ -157,31 +158,29 @@ public class FYVideoCompressor {
             completion(.failure(VideoCompressorError.noVideo))
             return
         }
-
+        
         let targetSize = config.scale ?? videoTrack.naturalSize
         let videoSettings = createVideoSettingsWithBitrate(config.videoBitrate,
                                                            maxKeyFrameInterval: config.videomaxKeyFrameInterval,
                                                            size: targetSize)
-
+        
         var audioTrack: AVAssetTrack?
         var audioSettings: [String: Any]?
-
+        
         if let adTrack = asset.tracks(withMediaType: .audio).first {
             audioTrack = adTrack
             audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: config.audioBitrate, sampleRate: config.audioSampleRate)
         }
-
+        
         _compress(asset: asset, fileType: config.fileType, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: config.fps, completion: completion)
     }
     
-    
-    ///  Your app should remove files from this directory when they are no longer needed;
-    ///  however, the system may purge this directory when your app is not running.
-    /// - Parameter path: path to remove
-    public static func removeCompressedTempFile(at path: URL) {
-        if FileManager.default.fileExists(atPath: path.path) {
-            try? FileManager.default.removeItem(at: path)
+    /// Remove all cached compressed videos
+    public func removeAllCompressedVideo() {
+        compressVideoPaths.forEach {
+            try? FileManager.default.removeItem(at: $0)
         }
+        compressVideoPaths.removeAll()
     }
     
     // MARK: - Private methods
@@ -189,19 +188,22 @@ public class FYVideoCompressor {
         // video
         let videoOutput = AVAssetReaderTrackOutput.init(track: videoTrack,
                                                         outputSettings: [kCVPixelBufferPixelFormatTypeKey as String:
-                                                                                                kCVPixelFormatType_32BGRA])
+                                                                            kCVPixelFormatType_32BGRA])
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.transform = videoTrack.preferredTransform // fix output video orientation
         do {
             var outputURL = try FileManager.tempDirectory(with: "CompressedVideo")
             let videoName = UUID().uuidString + ".\(fileType.fileExtension)"
             outputURL.appendPathComponent("\(videoName)")
-
+            
+            // store urls for deleting
+            compressVideoPaths.append(outputURL)
+            
             let reader = try AVAssetReader(asset: asset)
             let writer = try AVAssetWriter.init(url: outputURL, fileType: fileType)
             self.reader = reader
             self.writer = writer
-
+            
             // video output
             if reader.canAdd(videoOutput) {
                 reader.add(videoOutput)
@@ -210,7 +212,7 @@ public class FYVideoCompressor {
             if writer.canAdd(videoInput) {
                 writer.add(videoInput)
             }
-
+            
             // audio output
             var audioInput: AVAssetWriterInput?
             var audioOutput: AVAssetReaderTrackOutput?
@@ -228,18 +230,18 @@ public class FYVideoCompressor {
                     writer.add(adInput)
                 }
             }
-
-            #if DEBUG
+            
+#if DEBUG
             let startTime = Date()
-            #endif
+#endif
             // start compressing
             reader.startReading()
             writer.startWriting()
             writer.startSession(atSourceTime: CMTime.zero)
-
+            
             // output video
             group.enter()
-
+            
             let reduceFPS = targetFPS < videoTrack.nominalFrameRate
             if reduceFPS {
                 outputVideoDataByReducingFPS(originFPS: videoTrack.nominalFrameRate,
@@ -254,7 +256,7 @@ public class FYVideoCompressor {
                     self.group.leave()
                 }
             }
-
+            
             // output audio
             if let realAudioInput = audioInput, let realAudioOutput = audioOutput {
                 group.enter()
@@ -271,7 +273,7 @@ public class FYVideoCompressor {
                     }
                 }
             }
-
+            
             // completion
             group.notify(queue: .main) {
                 switch writer.status {
@@ -291,11 +293,11 @@ public class FYVideoCompressor {
                     completion(.failure(writer.error!))
                 }
             }
-
+            
         } catch {
             completion(.failure(error))
         }
-
+        
     }
     
     private func createVideoSettingsWithBitrate(_ bitrate: Int, maxKeyFrameInterval: Int, size: CGSize) -> [String: Any] {
@@ -310,7 +312,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                                  ]
         ]
     }
-
+    
     private func createAudioSettingsWithAudioTrack(_ audioTrack: AVAssetTrack, bitrate: Int, sampleRate: Int) -> [String: Any] {
 #if DEBUG
         if let audioFormatDescs = audioTrack.formatDescriptions as? [CMFormatDescription], let formatDescription = audioFormatDescs.first {
@@ -322,7 +324,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                 print("channels: \(streamBasicDescription.pointee.mChannelsPerFrame)")
                 print("formatID: \(streamBasicDescription.pointee.mFormatID)")
             }
-
+            
             print("TARGET:")
             print("bitrate: \(bitrate)")
             print("sampleRate: \(sampleRate)")
@@ -330,11 +332,11 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             print("formatID: \(kAudioFormatMPEG4AAC)")
         }
 #endif
-
+        
         var audioChannelLayout = AudioChannelLayout()
         memset(&audioChannelLayout, 0, MemoryLayout<AudioChannelLayout>.size)
         audioChannelLayout.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
-
+        
         return [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: sampleRate,
@@ -343,7 +345,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             AVChannelLayoutKey: Data(bytes: &audioChannelLayout, count: MemoryLayout<AudioChannelLayout>.size)
         ]
     }
-
+    
     private func outputVideoDataByReducingFPS(originFPS: Float,
                                               targetFPS: Float,
                                               videoInput: AVAssetWriterInput,
@@ -364,13 +366,13 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                         index += 1
                         let timingInfo = UnsafeMutablePointer<CMSampleTimingInfo>.allocate(capacity: 1)
                         let newSample = UnsafeMutablePointer<CMSampleBuffer?>.allocate(capacity: 1)
-
+                        
                         // Should check call succeeded
                         CMSampleBufferGetSampleTimingInfo(buffer, at: 0, timingInfoOut: timingInfo)
                         
                         // timingInfo.pointee.duration is 0
                         timingInfo.pointee.duration = CMTimeMultiplyByFloat64(timingInfo.pointee.duration, multiplier: Float64(originFPS/targetFPS))
-
+                        
                         // Again, should check call succeeded
                         CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer, sampleTimingEntryCount: 1, sampleTimingArray: timingInfo, sampleBufferOut: newSample)
                         videoInput.append(newSample.pointee!)
@@ -390,7 +392,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             }
         }
     }
-
+    
     func outputVideoData(_ videoInput: AVAssetWriterInput,
                          videoOutput: AVAssetReaderTrackOutput,
                          completion: @escaping(() -> Void)) {
@@ -407,13 +409,13 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             }
         }
     }
-
+    
     // MARK: - Helper
     private func calculateSizeWith(originalSize: CGSize, quality: VideoQuality) -> CGSize {
         let originalWidth = originalSize.width
         let originalHeight = originalSize.height
         let isRotated = originalHeight > originalWidth // videos captured by mobile phone have rotated size.
-                        
+        
         var threshold: CGFloat = -1
         
         switch quality {
@@ -458,21 +460,21 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         assert(targetFPS > 0)
         let originalFrames = Int(originalFPS * duration)
         let targetFrames = Int(ceil(Float(originalFrames) * targetFPS / originalFPS))
-        #if DEBUG
+#if DEBUG
         print("originFrames: \(originalFrames)")
         print("targetFrames: \(targetFrames)")
-        #endif
-                
+#endif
+        
         //
         var rangeArr = Array(repeating: 0, count: targetFrames)
         for i in 0..<targetFrames {
             rangeArr[i] = Int(ceil(Double(originalFrames) * Double(i+1) / Double(targetFrames)))
         }
         
-        #if DEBUG
+#if DEBUG
         print("range arr: \(rangeArr)")
         print("range arr count: \(rangeArr.count)")
-        #endif
+#endif
         
         var randomFrames = Array(repeating: 0, count: rangeArr.count)
         for index in 0..<rangeArr.count {
@@ -485,10 +487,10 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             }
         }
         
-        #if DEBUG
+#if DEBUG
         print("randomFrames: \(randomFrames)")
         print("randomFrames count: \(randomFrames.count)")
-        #endif
+#endif
         return randomFrames
     }
 }
