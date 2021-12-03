@@ -2,6 +2,8 @@ import Foundation
 import AVFoundation
 // sample video https://download.blender.org/demo/movies/BBB/
 
+/// A high-performance, flexible and easy to use Video compressor library written by Swift.
+/// Using hardware-accelerator APIs in AVFoundation.
 public class FYVideoCompressor {
     public enum VideoCompressorError: Error, LocalizedError {
         case noVideo
@@ -156,7 +158,7 @@ public class FYVideoCompressor {
     }
     
     /// Compress Video with config.
-    public func compressVideo(_ url: URL, config: CompressionConfig = .default, completion: @escaping (Result<URL, Error>) -> Void) {
+    public func compressVideo(_ url: URL, config: CompressionConfig, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -205,7 +207,7 @@ public class FYVideoCompressor {
             compressVideoPaths.append(outputURL)
             
             let reader = try AVAssetReader(asset: asset)
-            let writer = try AVAssetWriter.init(url: outputURL, fileType: fileType)
+            let writer = try AVAssetWriter(url: outputURL, fileType: fileType)
             self.reader = reader
             self.writer = writer
             
@@ -365,31 +367,34 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             while videoInput.isReadyForMoreMediaData {
                 if let buffer = videoOutput.copyNextSampleBuffer() {
                     // append first frame
-                    let frameIndex = randomFrames[index]
-                    
-                    if counter == frameIndex {
-                        index += 1
-                        let timingInfo = UnsafeMutablePointer<CMSampleTimingInfo>.allocate(capacity: 1)
-                        let newSample = UnsafeMutablePointer<CMSampleBuffer?>.allocate(capacity: 1)
-                        
-                        // Should check call succeeded
-                        CMSampleBufferGetSampleTimingInfo(buffer, at: 0, timingInfoOut: timingInfo)
-                        
-                        // timingInfo.pointee.duration is 0
-                        timingInfo.pointee.duration = CMTimeMultiplyByFloat64(timingInfo.pointee.duration, multiplier: Float64(originFPS/targetFPS))
-                        
-                        // Again, should check call succeeded
-                        CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer, sampleTimingEntryCount: 1, sampleTimingArray: timingInfo, sampleBufferOut: newSample)
-                        videoInput.append(newSample.pointee!)
-                        // deinit
-                        newSample.deinitialize(count: 1)
-                        newSample.deallocate()
-                        timingInfo.deinitialize(count: 1)
-                        timingInfo.deallocate()
+                    if index < randomFrames.count {
+                        let frameIndex = randomFrames[index]
+                        if counter == frameIndex {
+                            index += 1
+                            let timingInfo = UnsafeMutablePointer<CMSampleTimingInfo>.allocate(capacity: 1)
+                            let newSample = UnsafeMutablePointer<CMSampleBuffer?>.allocate(capacity: 1)
+                            
+                            // Should check call succeeded
+                            CMSampleBufferGetSampleTimingInfo(buffer, at: 0, timingInfoOut: timingInfo)
+                            
+                            // timingInfo.pointee.duration is 0
+                            timingInfo.pointee.duration = CMTimeMultiplyByFloat64(timingInfo.pointee.duration, multiplier: Float64(originFPS/targetFPS))
+                            
+                            // Again, should check call succeeded
+                            CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer, sampleTimingEntryCount: 1, sampleTimingArray: timingInfo, sampleBufferOut: newSample)
+                            videoInput.append(newSample.pointee!)
+                            // deinit
+                            newSample.deinitialize(count: 1)
+                            newSample.deallocate()
+                            timingInfo.deinitialize(count: 1)
+                            timingInfo.deallocate()
+                        }
+                        counter += 1
+                    } else {
+                        break
                     }
-                    counter += 1
                 } else {
-                    print("counter: \(counter)")
+//                    print("counter: \(counter)")
                     videoInput.markAsFinished()
                     completion()
                     break
@@ -495,24 +500,23 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         var randomFrames = Array(repeating: 0, count: rangeArr.count)
 
 #if DEBUG
-        defer {
-            print("originFrames: \(originalFrames)")
-            print("targetFrames: \(targetFrames)")
-            
-            print("range arr: \(rangeArr)")
-            print("range arr count: \(rangeArr.count)")
-            
-            print("randomFrames: \(randomFrames)")
-            print("randomFrames count: \(randomFrames.count)")
-        }
+//        defer {
+//            print("originFrames: \(originalFrames)")
+//            print("targetFrames: \(targetFrames)")
+//
+//            print("range arr: \(rangeArr)")
+//            print("range arr count: \(rangeArr.count)")
+//
+//            print("randomFrames: \(randomFrames)")
+//            print("randomFrames count: \(randomFrames.count)")
+//        }
 #endif
         guard !randomFrames.isEmpty else {
             return []
         }
         
         // first frame
-        let randomIndex = Int.random(in: 0..<rangeArr[0])
-        randomFrames[0] = randomIndex < 4 ? randomIndex : 0 // avoid droping the first few frames
+        // avoid droping the first frame
         guard randomFrames.count > 1 else {
             return randomFrames
         }
