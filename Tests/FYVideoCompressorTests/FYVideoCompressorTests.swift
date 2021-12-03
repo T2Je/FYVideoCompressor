@@ -18,4 +18,9 @@ final class FYVideoCompressorTests: XCTestCase {
         let movExtension = AVFileType("com.apple.quicktime-movie")
         XCTAssertEqual(movExtension.fileExtension, "mov")
     }
+    
+    func testGetRandomFramesIndexesCount() {
+        let arr = FYVideoCompressor.shared.getFrameIndexesWith(originalFPS: 50, targetFPS: 30, duration: 10)
+        XCTAssertEqual(arr.count, 300)
+    }
 }

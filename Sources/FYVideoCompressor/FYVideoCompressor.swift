@@ -42,9 +42,9 @@ public class FYVideoCompressor {
         var value: (fps: Float, bitrate: Int) {
             switch self {
             case .lowQuality:
-                return (24, 1000_000)
+                return (15, 400_000)
             case .mediumQuality:
-                return (30, 4000_000)
+                return (24, 2500_000)
             case .highQuality:
                 return (30, 8000_000)
             case .custom(fps: let fps, bitrate: let bitrate, _):
@@ -442,13 +442,13 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                 targetHeight = threshold * originalHeight / originalWidth
             }
         }
-        return CGSize(width: targetWidth, height: targetHeight)
+        return CGSize(width: Int(targetWidth), height: Int(targetHeight))
     }
     
     /// Randomly drop some indexes to get final frames indexes
     ///
     /// 1. Calculate original frames and target frames
-    /// 2. Divide the range (0, `originalFrames`) into `targetFrames` parts equaly, eg., divide range 0..9 into 3 parts, [0, 3, 6, 9].
+    /// 2. Divide the range (0, `originalFrames`) into `targetFrames` parts equaly, eg., divide range 0..<9 into 3 parts: 0..<3, 3..<6. 6..<9
     /// 3.
     ///
     /// - Parameters:
@@ -460,10 +460,6 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         assert(targetFPS > 0)
         let originalFrames = Int(originalFPS * duration)
         let targetFrames = Int(ceil(Float(originalFrames) * targetFPS / originalFPS))
-#if DEBUG
-        print("originFrames: \(originalFrames)")
-        print("targetFrames: \(targetFrames)")
-#endif
         
         //
         var rangeArr = Array(repeating: 0, count: targetFrames)
@@ -471,26 +467,37 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             rangeArr[i] = Int(ceil(Double(originalFrames) * Double(i+1) / Double(targetFrames)))
         }
         
+        var randomFrames = Array(repeating: 0, count: rangeArr.count)
+        
+        defer {
 #if DEBUG
+        print("originFrames: \(originalFrames)")
+        print("targetFrames: \(targetFrames)")
+
         print("range arr: \(rangeArr)")
         print("range arr count: \(rangeArr.count)")
-#endif
-        
-        var randomFrames = Array(repeating: 0, count: rangeArr.count)
-        for index in 0..<rangeArr.count {
-            if index == 0 {
-                randomFrames[index] = Int.random(in: 0..<rangeArr[index])
-            } else {
-                let pre = rangeArr[index-1]
-                let res = Int.random(in: pre..<rangeArr[index])
-                randomFrames[index] = res
-            }
-        }
-        
-#if DEBUG
+            
         print("randomFrames: \(randomFrames)")
         print("randomFrames count: \(randomFrames.count)")
 #endif
+        }
+        
+        guard !randomFrames.isEmpty else {
+            return []
+        }
+        
+        // first frame
+        let randomIndex = Int.random(in: 0..<rangeArr[0])
+        randomFrames[0] = randomIndex < 4 ? randomIndex : 0 // avoid droping the first few frames
+        guard randomFrames.count > 1 else {
+            return randomFrames
+        }
+        
+        for index in 1..<rangeArr.count {
+            let pre = rangeArr[index-1]
+            let res = Int.random(in: pre..<rangeArr[index])
+            randomFrames[index] = res
+        }
         return randomFrames
     }
 }
