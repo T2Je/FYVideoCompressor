@@ -38,11 +38,12 @@ public class FYVideoCompressor {
         case custom(fps: Float = 24, bitrate: Int = 1000_000, scale: CGSize)
         
         /// fps and bitrate.
+        /// This bitrate value is the maximum value. Depending on the video original bitrate, the video bitrate after compressing may be lower than this value.
         /// Considering that the video size taken by mobile phones is reversed, we don't hard code scale value.
         var value: (fps: Float, bitrate: Int) {
             switch self {
             case .lowQuality:
-                return (15, 400_000)
+                return (15, 250_000)
             case .mediumQuality:
                 return (24, 2500_000)
             case .highQuality:
@@ -105,8 +106,11 @@ public class FYVideoCompressor {
     private init() {
     }
     
-    static public var minimumVideoBitrate = 1000 * 400 // youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps
+    /// youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
+    /// Custom quality will not be affected by this value.
+    static public var minimumVideoBitrate = 1000 * 200
     
+    /// Compress Video with quality.
     public func compressVideo(_ url: URL, quality: VideoQuality = .mediumQuality, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
@@ -116,12 +120,12 @@ public class FYVideoCompressor {
         }
         // --- Video ---
         // video bit rate
-        let targetVideoBitRate = quality.value.bitrate
-        
+        let targetVideoBitrate = getVideoBitrateWithQuality(quality, originalBitrate: Int(videoTrack.estimatedDataRate))
+                
         // scale size
         let scaleSize = calculateSizeWith(originalSize: videoTrack.naturalSize, quality: quality)
         
-        let videoSettings = createVideoSettingsWithBitrate(targetVideoBitRate,
+        let videoSettings = createVideoSettingsWithBitrate(targetVideoBitrate,
                                                            maxKeyFrameInterval: 10,
                                                            size: scaleSize)
         var audioTrack: AVAssetTrack?
@@ -145,12 +149,13 @@ public class FYVideoCompressor {
         print("size: \(videoTrack.naturalSize)")
         
         print("TARGET:")
-        print("video bitrate: \(targetVideoBitRate) b/s")
+        print("video bitrate: \(targetVideoBitrate) b/s")
         print("size: (\(scaleSize))")
 #endif
         _compress(asset: asset, fileType: .mp4, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: quality.value.fps, completion: completion)
     }
     
+    /// Compress Video with config.
     public func compressVideo(_ url: URL, config: CompressionConfig = .default, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
@@ -410,7 +415,27 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         }
     }
     
-    // MARK: - Helper
+    // MARK: - Calculation
+    func getVideoBitrateWithQuality(_ quality: VideoQuality, originalBitrate: Int) -> Int {
+        var targetBitrate = quality.value.bitrate
+        if originalBitrate < targetBitrate {
+            switch quality {
+            case .lowQuality:
+                targetBitrate = originalBitrate/8
+                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+            case .mediumQuality:
+                targetBitrate = originalBitrate/4
+                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+            case .highQuality:
+                targetBitrate = originalBitrate/2
+                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+            case .custom(_, _, _):
+                break
+            }
+        }
+        return targetBitrate
+    }
+    
     private func calculateSizeWith(originalSize: CGSize, quality: VideoQuality) -> CGSize {
         let originalWidth = originalSize.width
         let originalHeight = originalSize.height
@@ -468,20 +493,19 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         }
         
         var randomFrames = Array(repeating: 0, count: rangeArr.count)
-        
-        defer {
-#if DEBUG
-        print("originFrames: \(originalFrames)")
-        print("targetFrames: \(targetFrames)")
 
-        print("range arr: \(rangeArr)")
-        print("range arr count: \(rangeArr.count)")
+#if DEBUG
+        defer {
+            print("originFrames: \(originalFrames)")
+            print("targetFrames: \(targetFrames)")
             
-        print("randomFrames: \(randomFrames)")
-        print("randomFrames count: \(randomFrames.count)")
-#endif
+            print("range arr: \(rangeArr)")
+            print("range arr count: \(rangeArr.count)")
+            
+            print("randomFrames: \(randomFrames)")
+            print("randomFrames count: \(randomFrames.count)")
         }
-        
+#endif
         guard !randomFrames.isEmpty else {
             return []
         }
