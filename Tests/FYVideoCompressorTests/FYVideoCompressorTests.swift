@@ -30,7 +30,7 @@ final class FYVideoCompressorTests: XCTestCase {
     }
     
     override func tearDownWithError() throws {
-        try FileManager.default.removeItem(at: sampleVideoPath)
+        try? FileManager.default.removeItem(at: sampleVideoPath)
         if let compressedVideoPath = compressedVideoPath {
             try FileManager.default.removeItem(at: compressedVideoPath)
         }
@@ -66,6 +66,20 @@ final class FYVideoCompressorTests: XCTestCase {
         XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
     }
     
+    func testTargetVideoSizeWithQuality() {
+        let targetSize = FYVideoCompressor.shared.calculateSizeWithQuality(.lowQuality, originalSize: CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(targetSize, CGSize(width: 398, height: 224))
+    }
+    
+    func testTargetVideoSizeWithConfig() {
+        let scale1 = FYVideoCompressor.shared.calculateSizeWithScale(CGSize(width: -1, height: 224), originalSize: CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(scale1, CGSize(width: 398, height: 224))
+        
+        let scale2 = FYVideoCompressor.shared.calculateSizeWithScale(CGSize(width: 640, height: -1), originalSize: CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(scale2, CGSize(width: 640, height: 360))
+    }
+    
+    // MARK: Download sample video
     func downloadSampleVideo(_ completion: @escaping ((Result<URL, Error>) -> Void)) {
         if FileManager.default.fileExists(atPath: self.sampleVideoPath.absoluteString) {
             completion(.success(self.sampleVideoPath))

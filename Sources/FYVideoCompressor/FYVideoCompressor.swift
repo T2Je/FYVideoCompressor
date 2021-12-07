@@ -125,7 +125,7 @@ public class FYVideoCompressor {
         let targetVideoBitrate = getVideoBitrateWithQuality(quality, originalBitrate: Int(videoTrack.estimatedDataRate))
                 
         // scale size
-        let scaleSize = calculateSizeWith(originalSize: videoTrack.naturalSize, quality: quality)
+        let scaleSize = calculateSizeWithQuality(quality, originalSize: videoTrack.naturalSize)
         
         let videoSettings = createVideoSettingsWithBitrate(targetVideoBitrate,
                                                            maxKeyFrameInterval: 10,
@@ -166,7 +166,7 @@ public class FYVideoCompressor {
             return
         }
         
-        let targetSize = config.scale ?? videoTrack.naturalSize
+        let targetSize = calculateSizeWithScale(config.scale, originalSize: videoTrack.naturalSize)
         let videoSettings = createVideoSettingsWithBitrate(config.videoBitrate,
                                                            maxKeyFrameInterval: config.videomaxKeyFrameInterval,
                                                            size: targetSize)
@@ -441,7 +441,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         return targetBitrate
     }
     
-    private func calculateSizeWith(originalSize: CGSize, quality: VideoQuality) -> CGSize {
+    func calculateSizeWithQuality(_ quality: VideoQuality, originalSize: CGSize) -> CGSize {
         let originalWidth = originalSize.width
         let originalHeight = originalSize.height
         let isRotated = originalHeight > originalWidth // videos captured by mobile phone have rotated size.
@@ -473,6 +473,26 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             }
         }
         return CGSize(width: Int(targetWidth), height: Int(targetHeight))
+    }
+    
+    func calculateSizeWithScale(_ scale: CGSize?, originalSize: CGSize) -> CGSize {
+        guard let scale = scale else {
+            return originalSize
+        }
+        if scale.width == -1 && scale.height == -1 {
+            return originalSize
+        } else if scale.width != -1 && scale.height != -1 {
+            return scale
+        } else {
+            var targetWidth: Int = Int(scale.width)
+            var targetHeight: Int = Int(scale.height)
+            if scale.width == -1 {
+                targetWidth = Int(scale.height * originalSize.width / originalSize.height)
+            } else {
+                targetHeight = Int(scale.width * originalSize.height / originalSize.width)
+            }
+            return CGSize(width: targetWidth, height: targetHeight)
+        }
     }
     
     /// Randomly drop some indexes to get final frames indexes

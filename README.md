@@ -1,6 +1,6 @@
 # FYVideoCompressor
 
-A high-performance, flexible and easy to use Video compressor library written by Swift. Using hardware-accelerator APIs in AVFoundation.
+A high-performance, flexible and easy to use Video compressor library written by Swift. Using hardware-accelerator APIs in AVFoundation. You can add `Bitrate`, `FPS`, and other filters.
 
 [![Version](https://img.shields.io/badge/language-swift%205-f48041.svg?style=flat)](https://developer.apple.com/swift) [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg?style=flat)](https://github.com/T2Je/FYVideoCompressor) ![Platform](https://img.shields.io/cocoapods/p/FYVideoCompressor)
 
