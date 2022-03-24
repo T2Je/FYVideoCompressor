@@ -59,41 +59,58 @@ public class FYVideoCompressor {
     
     // Compression Encode Parameters
     public struct CompressionConfig {
-        // video
-        let videoBitrate: Int // bitrate use 1000 for 1kbps.https://en.wikipedia.org/wiki/Bit_rate
+        //Tag: video
+        /// bitrate use 1000 for 1kbps. https://en.wikipedia.org/wiki/Bit_rate.
+        /// Default is 1Mbps
+        public var videoBitrate: Int
         
-        let videomaxKeyFrameInterval: Int // A key to access the maximum interval between keyframes. 1 means key frames only, H.264 only
+        /// A key to access the maximum interval between keyframes. 1 means key frames only, H.264 only. Default is 10.
+        public var videomaxKeyFrameInterval: Int //
         
-        let fps: Float // If video's fps less than this value, this value will be ignored.
+        /// If video's fps less than this value, this value will be ignored. Default is 24.
+        public var fps: Float
         
-        // audio
-        let audioSampleRate: Int
+        //Tag: audio
+        /// Default 44100
+        public var audioSampleRate: Int
         
-        let audioBitrate: Int
+        /// Default is 128_000
+        public var audioBitrate: Int
         
-        let fileType: AVFileType
+        /// Default is mp4
+        public var fileType: AVFileType
         
         /// Scale (resize) the input video
         /// 1. If you need to simply resize your video to a specific size (e.g 320×240), you can use the scale: CGSize(width: 320, height: 240)
         /// 2. If you want to keep the aspect ratio, you need to specify only one component, either width or height, and set the other component to -1
         ///    e.g CGSize(width: 320, height: -1)
-        let scale: CGSize?
+        public var scale: CGSize?
         
-        /// size: nil
-        /// videoBitrate: 1Mbps
-        /// videomaxKeyFrameInterval: 10
-        /// audioSampleRate: 44100
-        /// audioBitrate: 128_000
-        /// fileType: mp4
-        public static let `default` = CompressionConfig(
-            videoBitrate: 1000_000,
-            videomaxKeyFrameInterval: 10,
-            fps: 24,
-            audioSampleRate: 44100,
-            audioBitrate: 128_000,
-            fileType: .mp4,
-            scale: nil
-        )
+        public init() {
+            self.videoBitrate = 1000_000
+            self.videomaxKeyFrameInterval = 10
+            self.fps = 24
+            self.audioSampleRate = 44100
+            self.audioBitrate = 128_000
+            self.fileType = .mp4
+            self.scale = nil
+        }
+        
+        public init(videoBitrate: Int,
+                    videomaxKeyFrameInterval: Int,
+                    fps: Float,
+                    audioSampleRate: Int,
+                    audioBitrate: Int,
+                    fileType: AVFileType,
+                    scale: CGSize?) {
+            self.videoBitrate = videoBitrate
+            self.videomaxKeyFrameInterval = videomaxKeyFrameInterval
+            self.fps = fps
+            self.audioSampleRate = audioSampleRate
+            self.audioBitrate = audioBitrate
+            self.fileType = fileType
+            self.scale = scale
+        }
     }
     
     private let group = DispatchGroup()
@@ -108,7 +125,7 @@ public class FYVideoCompressor {
     private init() {
     }
     
-    /// youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
+    /// Youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
     /// Custom quality will not be affected by this value.
     static public var minimumVideoBitrate = 1000 * 200
     
