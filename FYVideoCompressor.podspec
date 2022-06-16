@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'FYVideoCompressor'
-  s.version          = '0.0.3'
+  s.version          = '0.0.4'
   s.summary          = 'A high-performance, flexible and easy to use Video compressor library written by Swift.'
 
 # This description is used to generate tags and improve search results.
