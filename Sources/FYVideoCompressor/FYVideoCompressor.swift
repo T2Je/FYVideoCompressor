@@ -60,6 +60,9 @@ public class FYVideoCompressor {
     // Compression Encode Parameters
     public struct CompressionConfig {
         //Tag: video
+        
+        /// Config video bitrate.
+        /// If the input video bitrate is less than this value, it will be ignored.
         /// bitrate use 1000 for 1kbps. https://en.wikipedia.org/wiki/Bit_rate.
         /// Default is 1Mbps
         public var videoBitrate: Int
@@ -71,10 +74,13 @@ public class FYVideoCompressor {
         public var fps: Float
         
         //Tag: audio
+        
+        /// Sample rate must be between 8.0 and 192.0 kHz inclusive
         /// Default 44100
         public var audioSampleRate: Int
         
         /// Default is 128_000
+        /// If the input audio bitrate is less than this value, it will be ignored.
         public var audioBitrate: Int
         
         /// Default is mp4
@@ -96,13 +102,13 @@ public class FYVideoCompressor {
             self.scale = nil
         }
         
-        public init(videoBitrate: Int,
-                    videomaxKeyFrameInterval: Int,
-                    fps: Float,
-                    audioSampleRate: Int,
-                    audioBitrate: Int,
-                    fileType: AVFileType,
-                    scale: CGSize?) {
+        public init(videoBitrate: Int = 1000_000,
+                    videomaxKeyFrameInterval: Int = 10,
+                    fps: Float = 24,
+                    audioSampleRate: Int = 44100,
+                    audioBitrate: Int = 128_000,
+                    fileType: AVFileType = .mp4,
+                    scale: CGSize? = nil) {
             self.videoBitrate = videoBitrate
             self.videomaxKeyFrameInterval = videomaxKeyFrameInterval
             self.fps = fps
@@ -139,7 +145,7 @@ public class FYVideoCompressor {
         }
         // --- Video ---
         // video bit rate
-        let targetVideoBitrate = getVideoBitrateWithQuality(quality, originalBitrate: Int(videoTrack.estimatedDataRate))
+        let targetVideoBitrate = getVideoBitrateWithQuality(quality, originalBitrate: videoTrack.estimatedDataRate)
                 
         // scale size
         let scaleSize = calculateSizeWithQuality(quality, originalSize: videoTrack.naturalSize)
@@ -157,7 +163,7 @@ public class FYVideoCompressor {
             
             audioBitrate = quality == .lowQuality ? 96_000 : 128_000 // 96_000
             audioSampleRate = 44100
-            audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: audioBitrate, sampleRate: audioSampleRate)
+            audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: Float(audioBitrate), sampleRate: audioSampleRate)
         }
 #if DEBUG
         print("Original video size: \(url.sizePerMB())M")
@@ -182,9 +188,16 @@ public class FYVideoCompressor {
             completion(.failure(VideoCompressorError.noVideo))
             return
         }
+        let targetVideoBitrate: Float
+        if Float(config.videoBitrate) > videoTrack.estimatedDataRate {
+            let tempBitrate = videoTrack.estimatedDataRate/4
+            targetVideoBitrate = max(tempBitrate, Float(Self.minimumVideoBitrate))
+        } else {
+            targetVideoBitrate = Float(config.videoBitrate)
+        }
         
         let targetSize = calculateSizeWithScale(config.scale, originalSize: videoTrack.naturalSize)
-        let videoSettings = createVideoSettingsWithBitrate(config.videoBitrate,
+        let videoSettings = createVideoSettingsWithBitrate(targetVideoBitrate,
                                                            maxKeyFrameInterval: config.videomaxKeyFrameInterval,
                                                            size: targetSize)
         
@@ -193,9 +206,32 @@ public class FYVideoCompressor {
         
         if let adTrack = asset.tracks(withMediaType: .audio).first {
             audioTrack = adTrack
-            audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: config.audioBitrate, sampleRate: config.audioSampleRate)
+            let targetAudioBitrate = Float(config.audioBitrate) < adTrack.estimatedDataRate ? Float(config.audioBitrate) : adTrack.estimatedDataRate
+            
+            let targetSampleRate: Int
+            if config.audioSampleRate < 8000 {
+                targetSampleRate = 8000
+            } else if config.audioSampleRate > 192_000 {
+                targetSampleRate = 192_000
+            } else {
+                targetSampleRate = config.audioSampleRate
+            }
+            audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: targetAudioBitrate, sampleRate: targetSampleRate)
         }
         
+#if DEBUG
+        print("Original video size: \(url.sizePerMB())M")
+        print("########## Video ##########")
+        print("ORIGINAL:")
+        print("bitrate: \(videoTrack.estimatedDataRate) b/s")
+        
+        print("size: \(videoTrack.naturalSize)")
+        
+        print("TARGET:")
+        print("video bitrate: \(targetVideoBitrate) b/s")
+        print("size: (\(targetSize))")
+#endif
+
         _compress(asset: asset, fileType: config.fileType, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: config.fps, completion: completion)
     }
     
@@ -324,7 +360,7 @@ public class FYVideoCompressor {
         
     }
     
-    private func createVideoSettingsWithBitrate(_ bitrate: Int, maxKeyFrameInterval: Int, size: CGSize) -> [String: Any] {
+    private func createVideoSettingsWithBitrate(_ bitrate: Float, maxKeyFrameInterval: Int, size: CGSize) -> [String: Any] {
         return [AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: size.width,
                AVVideoHeightKey: size.height,
@@ -337,7 +373,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         ]
     }
     
-    private func createAudioSettingsWithAudioTrack(_ audioTrack: AVAssetTrack, bitrate: Int, sampleRate: Int) -> [String: Any] {
+    private func createAudioSettingsWithAudioTrack(_ audioTrack: AVAssetTrack, bitrate: Float, sampleRate: Int) -> [String: Any] {
 #if DEBUG
         if let audioFormatDescs = audioTrack.formatDescriptions as? [CMFormatDescription], let formatDescription = audioFormatDescs.first {
             print("########## Audio ##########")
@@ -438,19 +474,19 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
     }
     
     // MARK: - Calculation
-    func getVideoBitrateWithQuality(_ quality: VideoQuality, originalBitrate: Int) -> Int {
-        var targetBitrate = quality.value.bitrate
+    func getVideoBitrateWithQuality(_ quality: VideoQuality, originalBitrate: Float) -> Float {
+        var targetBitrate = Float(quality.value.bitrate)
         if originalBitrate < targetBitrate {
             switch quality {
             case .lowQuality:
                 targetBitrate = originalBitrate/8
-                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+                targetBitrate = max(targetBitrate, Float(Self.minimumVideoBitrate))
             case .mediumQuality:
                 targetBitrate = originalBitrate/4
-                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+                targetBitrate = max(targetBitrate, Float(Self.minimumVideoBitrate))
             case .highQuality:
                 targetBitrate = originalBitrate/2
-                targetBitrate = max(targetBitrate, Self.minimumVideoBitrate)
+                targetBitrate = max(targetBitrate, Float(Self.minimumVideoBitrate))
             case .custom(_, _, _):
                 break
             }
@@ -500,15 +536,12 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             return originalSize
         } else if scale.width != -1 && scale.height != -1 {
             return scale
+        } else if scale.width == -1 {
+            let targetWidth = Int(scale.height * originalSize.width / originalSize.height)
+            return CGSize(width: CGFloat(targetWidth), height: scale.height)
         } else {
-            var targetWidth: Int = Int(scale.width)
-            var targetHeight: Int = Int(scale.height)
-            if scale.width == -1 {
-                targetWidth = Int(scale.height * originalSize.width / originalSize.height)
-            } else {
-                targetHeight = Int(scale.width * originalSize.height / originalSize.width)
-            }
-            return CGSize(width: targetWidth, height: targetHeight)
+            let targetHeight = Int(scale.width * originalSize.height / originalSize.width)
+            return CGSize(width: scale.width, height: CGFloat(targetHeight))
         }
     }
     
