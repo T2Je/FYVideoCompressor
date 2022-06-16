@@ -206,7 +206,12 @@ public class FYVideoCompressor {
         
         if let adTrack = asset.tracks(withMediaType: .audio).first {
             audioTrack = adTrack
-            let targetAudioBitrate = Float(config.audioBitrate) < adTrack.estimatedDataRate ? Float(config.audioBitrate) : adTrack.estimatedDataRate
+            let targetAudioBitrate: Float
+            if Float(config.audioBitrate) < adTrack.estimatedDataRate {
+                targetAudioBitrate = Float(config.audioBitrate)
+            } else {
+                targetAudioBitrate = 64_000
+            }
             
             let targetSampleRate: Int
             if config.audioSampleRate < 8000 {
@@ -435,7 +440,9 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                             
                             // Again, should check call succeeded
                             CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer, sampleTimingEntryCount: 1, sampleTimingArray: timingInfo, sampleBufferOut: newSample)
-                            videoInput.append(newSample.pointee!)
+                            if let newSamplePointee = newSample.pointee {
+                                videoInput.append(newSamplePointee)
+                            }
                             // deinit
                             newSample.deinitialize(count: 1)
                             newSample.deallocate()

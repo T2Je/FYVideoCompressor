@@ -3,7 +3,11 @@ import XCTest
 import AVFoundation
 
 final class FYVideoCompressorTests: XCTestCase {
-    static let testVideoURL = URL(string: "http://clips.vorwaerts-gmbh.de/VfE_html5.mp4")! // video size 5.3M
+    // sample video websites: https://file-examples.com/index.php/sample-video-files/sample-mp4-files/
+    
+    // http://clips.vorwaerts-gmbh.de/VfE_html5.mp4  5.3
+    // https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4
+    static let testVideoURL = URL(string: "https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4")! // video size 5.3M
     
     let sampleVideoPath: URL = try! FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("sample.mp4")
     var compressedVideoPath: URL?
@@ -68,7 +72,7 @@ final class FYVideoCompressorTests: XCTestCase {
     
     func testCompressVideoWithScale() {
         let expectation = XCTestExpectation(description: "compress video")
-        let config = FYVideoCompressor.CompressionConfig(scale: CGSize(width: -1, height: 224))
+        let config = FYVideoCompressor.CompressionConfig(scale: CGSize(width: -1, height: -1))
         FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
