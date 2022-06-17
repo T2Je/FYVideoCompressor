@@ -64,13 +64,13 @@ class BatchCompressionTests: XCTestCase {
         tasks.values.forEach {
             $0.cancel()
         }
-//        sampleVideoPath.values.forEach {
-//            try? FileManager.default.removeItem(at: $0)
-//        }
-//
-//        compressedVideoPath.values.forEach {
-//            try? FileManager.default.removeItem(at: $0)
-//        }
+        sampleVideoPath.values.forEach {
+            try? FileManager.default.removeItem(at: $0)
+        }
+
+        compressedVideoPath.values.forEach {
+            try? FileManager.default.removeItem(at: $0)
+        }
     }
     
     func testCompressVideo() {
