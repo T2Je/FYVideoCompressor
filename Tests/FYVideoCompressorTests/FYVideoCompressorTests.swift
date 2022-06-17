@@ -4,6 +4,7 @@ import AVFoundation
 
 final class FYVideoCompressorTests: XCTestCase {
     // sample video websites: https://file-examples.com/index.php/sample-video-files/sample-mp4-files/
+    // https://www.learningcontainer.com/mp4-sample-video-files-download/#Sample_MP4_Video_File_Download_for_Testing
     
     // http://clips.vorwaerts-gmbh.de/VfE_html5.mp4  5.3
     // https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4
@@ -34,6 +35,7 @@ final class FYVideoCompressorTests: XCTestCase {
     }
     
     override func tearDownWithError() throws {
+        task?.cancel()
         try? FileManager.default.removeItem(at: sampleVideoPath)
         if let compressedVideoPath = compressedVideoPath {
             try FileManager.default.removeItem(at: compressedVideoPath)
