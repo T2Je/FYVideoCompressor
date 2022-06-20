@@ -4,6 +4,7 @@ import AVFoundation
 
 final class FYVideoCompressorTests: XCTestCase {
     // sample video websites: https://file-examples.com/index.php/sample-video-files/sample-mp4-files/
+    // https://www.learningcontainer.com/mp4-sample-video-files-download/#Sample_MP4_Video_File_Download_for_Testing
     
     // http://clips.vorwaerts-gmbh.de/VfE_html5.mp4  5.3
     // https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4
@@ -13,6 +14,8 @@ final class FYVideoCompressorTests: XCTestCase {
     var compressedVideoPath: URL?
     
     var task: URLSessionDataTask?
+    
+    let compressor = FYVideoCompressor()
     
     override func setUpWithError() throws {
         let expectation = XCTestExpectation(description: "video cache downloading remote video")
@@ -34,6 +37,7 @@ final class FYVideoCompressorTests: XCTestCase {
     }
     
     override func tearDownWithError() throws {
+        task?.cancel()
         try? FileManager.default.removeItem(at: sampleVideoPath)
         if let compressedVideoPath = compressedVideoPath {
             try FileManager.default.removeItem(at: compressedVideoPath)
@@ -49,14 +53,14 @@ final class FYVideoCompressorTests: XCTestCase {
     }
     
     func testGetRandomFramesIndexesCount() {
-        let arr = FYVideoCompressor.shared.getFrameIndexesWith(originalFPS: 50, targetFPS: 30, duration: 10)
+        let arr = compressor.getFrameIndexesWith(originalFPS: 50, targetFPS: 30, duration: 10)
         XCTAssertEqual(arr.count, 300)
     }
     
     func testCompressVideo() {
         let expectation = XCTestExpectation(description: "compress video")
                         
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, quality: .lowQuality) { result in
+        compressor.compressVideo(sampleVideoPath, quality: .lowQuality) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -73,7 +77,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithScale() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(scale: CGSize(width: -1, height: -1))
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -91,7 +95,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithVideoBitrate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(videoBitrate: 200_000)
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -109,7 +113,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithVideomaxKeyFrameInterval() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(videomaxKeyFrameInterval: 1)
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -127,7 +131,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithFPS() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(fps: 24)
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -145,7 +149,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithAudioSampleRate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(audioSampleRate: 44100)
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -163,7 +167,7 @@ final class FYVideoCompressorTests: XCTestCase {
     func testCompressVideoWithAudioBitrate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(audioBitrate: 128000)
-        FYVideoCompressor.shared.compressVideo(sampleVideoPath, config: config) { result in
+        compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
                 self.compressedVideoPath = video
@@ -179,15 +183,15 @@ final class FYVideoCompressorTests: XCTestCase {
     }
     
     func testTargetVideoSizeWithQuality() {
-        let targetSize = FYVideoCompressor.shared.calculateSizeWithQuality(.lowQuality, originalSize: CGSize(width: 1920, height: 1080))
+        let targetSize = compressor.calculateSizeWithQuality(.lowQuality, originalSize: CGSize(width: 1920, height: 1080))
         XCTAssertEqual(targetSize, CGSize(width: 398, height: 224))
     }
     
     func testTargetVideoSizeWithConfig() {
-        let scale1 = FYVideoCompressor.shared.calculateSizeWithScale(CGSize(width: -1, height: 224), originalSize: CGSize(width: 1920, height: 1080))
+        let scale1 = compressor.calculateSizeWithScale(CGSize(width: -1, height: 224), originalSize: CGSize(width: 1920, height: 1080))
         XCTAssertEqual(scale1, CGSize(width: 398, height: 224))
         
-        let scale2 = FYVideoCompressor.shared.calculateSizeWithScale(CGSize(width: 640, height: -1), originalSize: CGSize(width: 1920, height: 1080))
+        let scale2 = compressor.calculateSizeWithScale(CGSize(width: 640, height: -1), originalSize: CGSize(width: 1920, height: 1080))
         XCTAssertEqual(scale2, CGSize(width: 640, height: 360))
     }
     

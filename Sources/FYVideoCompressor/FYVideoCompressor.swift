@@ -126,9 +126,10 @@ public class FYVideoCompressor {
     private var writer: AVAssetWriter?
     private var compressVideoPaths: [URL] = []
     
+    @available(*, deprecated, renamed: "init()", message: "In the case of batch compression, singleton causes a crash, be sure to use init method - init()")
     static public let shared: FYVideoCompressor = FYVideoCompressor()
     
-    private init() {
+    public init() {
     }
     
     /// Youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
@@ -153,6 +154,9 @@ public class FYVideoCompressor {
         let videoSettings = createVideoSettingsWithBitrate(targetVideoBitrate,
                                                            maxKeyFrameInterval: 10,
                                                            size: scaleSize)
+#if DEBUG
+        print("************** Video info **************")
+#endif
         var audioTrack: AVAssetTrack?
         var audioSettings: [String: Any]?
         if let adTrack = asset.tracks(withMediaType: .audio).first {
@@ -166,8 +170,7 @@ public class FYVideoCompressor {
             audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: Float(audioBitrate), sampleRate: audioSampleRate)
         }
 #if DEBUG
-        print("Original video size: \(url.sizePerMB())M")
-        print("########## Video ##########")
+        print("🎬 Video ")
         print("ORIGINAL:")
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
         
@@ -176,6 +179,7 @@ public class FYVideoCompressor {
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
         print("size: (\(scaleSize))")
+        print("Original video size: \(url.sizePerMB())M")
 #endif
         _compress(asset: asset, fileType: .mp4, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: quality.value.fps, completion: completion)
     }
@@ -381,7 +385,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
     private func createAudioSettingsWithAudioTrack(_ audioTrack: AVAssetTrack, bitrate: Float, sampleRate: Int) -> [String: Any] {
 #if DEBUG
         if let audioFormatDescs = audioTrack.formatDescriptions as? [CMFormatDescription], let formatDescription = audioFormatDescs.first {
-            print("########## Audio ##########")
+            print("🔊 Audio")
             print("ORINGIAL:")
             print("bitrate: \(audioTrack.estimatedDataRate)")
             if let streamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) {
