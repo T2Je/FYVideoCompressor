@@ -31,7 +31,7 @@ public enum VideoQuality: Equatable {
 Set `VideoQuality` to get different quality of video, beside, you can set custom fps, bitrate and scale:
 
 ```swift
-FYVideoCompressor.shared.compressVideo(yourVideoPath, quality: .lowQuality) { result in
+FYVideoCompressor().compressVideo(yourVideoPath, quality: .lowQuality) { result in
             switch result {
             case .success(let compressedVideoURL):
             case .failure(let error):
@@ -89,7 +89,7 @@ let config = FYVideoCompressor.CompressionConfig(videoBitrate: 1000_000,
                                                 audioBitrate: 128_000,
                                                 fileType: .mp4,
                                                 scale: CGSize(width: 640, height: 480))
-FYVideoCompressor.shared.compressVideo(yourVideoPath, config: config) { result in
+FYVideoCompressor().compressVideo(yourVideoPath, config: config) { result in
     switch result {
     case .success(let compressedVideoURL):
     case .failure(let error):
