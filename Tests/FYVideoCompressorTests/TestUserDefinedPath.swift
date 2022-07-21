@@ -49,6 +49,8 @@ class TestUserDefinedPath: XCTestCase {
                         
         XCTAssertNotNil(compressedVideoPath, "user defined path shouldn't be nil")
         
+        XCTAssertTrue(FileManager.default.isValidDirectory(atPath: compressedVideoPath), "user defined path is invalid")
+        
         compressor.compressVideo(sampleVideoPath, quality: .lowQuality, outputPath: compressedVideoPath) { result in
             switch result {
             case .success(let video):
