@@ -189,14 +189,15 @@ public class FYVideoCompressor {
 #if DEBUG
         print("🎬 Video ")
         print("ORIGINAL:")
+        print("video size: \(url.sizePerMB())M")
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
-        
-        print("size: \(videoTrack.naturalSize)")
-        
+        print("scale size: \(videoTrack.naturalSize)")
+                
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
-        print("size: (\(scaleSize))")
-        print("Original video size: \(url.sizePerMB())M")
+        print("scale size: (\(scaleSize))")
+        
+        print("****************************************")
 #endif
         var _outputPath: URL
         if let outputPath = outputPath {
@@ -266,16 +267,18 @@ public class FYVideoCompressor {
             _outputPath = FileManager.tempDirectory(with: "CompressedVideo")
         }
 #if DEBUG
-        print("Original video size: \(url.sizePerMB())M")
-        print("########## Video ##########")
-        print("ORIGINAL:")
-        print("bitrate: \(videoTrack.estimatedDataRate) b/s")
+        print("************** Video info **************")
         
-        print("size: \(videoTrack.naturalSize)")
+        print("🎬 Video ")
+        print("ORIGINAL:")
+        print("video size: \(url.sizePerMB())M")
+        print("bitrate: \(videoTrack.estimatedDataRate) b/s")
+        print("scale size: \(videoTrack.naturalSize)")
         
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
-        print("size: (\(targetSize))")
+        print("scale size: (\(targetSize))")
+        print("****************************************")
 #endif
 
         _compress(asset: asset,
@@ -303,15 +306,6 @@ public class FYVideoCompressor {
         
         for candidate in candidates.reversed() {
             compressVideoPaths.remove(at: candidate)
-        }
-    }
-    
-    func isDirectory(atPath path: URL) -> Bool {
-        var isDir : ObjCBool = false
-        if FileManager.default.fileExists(atPath: path.absoluteString, isDirectory:&isDir) {
-            return isDir.boolValue
-        } else {
-            return false
         }
     }
     
@@ -427,8 +421,10 @@ public class FYVideoCompressor {
 #if DEBUG
                         let endTime = Date()
                         let elapse = endTime.timeIntervalSince(startTime)
+                        print("****************************************")
                         print("compression time: \(elapse)")
                         print("compressed video size: \(outputPath.sizePerMB())M")
+                        print("****************************************")
 #endif
                         DispatchQueue.main.sync {
                             completion(.success(outputPath))

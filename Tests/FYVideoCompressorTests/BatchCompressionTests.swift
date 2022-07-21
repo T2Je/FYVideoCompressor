@@ -79,7 +79,7 @@ class BatchCompressionTests: XCTestCase {
         var allSampleVideosCount = sampleVideoPath.count
         
         sampleVideoPath.values.forEach { sampleVideo in
-            FYVideoCompressor.shared.compressVideo(sampleVideo, quality: .lowQuality) { result in
+            FYVideoCompressor().compressVideo(sampleVideo, quality: .lowQuality) { result in
                 switch result {
                 case .success(let video):
                     self.compressedVideoPath[sampleVideo] = video
@@ -116,7 +116,7 @@ class BatchCompressionTests: XCTestCase {
             sampleVideoCachedURL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("\(url.lastPathComponent)")
             sampleVideoPath[url] = sampleVideoCachedURL
         }
-        if FileManager.default.fileExists(atPath: sampleVideoCachedURL.absoluteString) {
+        if FileManager.default.fileExists(atPath: sampleVideoCachedURL.path) {
             completion(.success(sampleVideoCachedURL))
         } else {
             request(url) { result in

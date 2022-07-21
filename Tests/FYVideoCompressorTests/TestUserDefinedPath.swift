@@ -65,7 +65,7 @@ class TestUserDefinedPath: XCTestCase {
     
     // MARK: Download sample video
     func downloadSampleVideo(_ completion: @escaping ((Result<URL, Error>) -> Void)) {
-        if FileManager.default.fileExists(atPath: self.sampleVideoPath.absoluteString) {
+        if FileManager.default.fileExists(atPath: self.sampleVideoPath.path) {
             completion(.success(self.sampleVideoPath))
         } else {
             request(Self.testVideoURL) { result in

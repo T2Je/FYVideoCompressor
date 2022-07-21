@@ -39,27 +39,22 @@ extension FileManager {
 
         tempURL.appendPathComponent(pathComponent)
 
-        if !FileManager.default.fileExists(atPath: tempURL.absoluteString) {
+        if !FileManager.default.fileExists(atPath: tempURL.path) {
             do {
                 try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true, attributes: nil)
-                #if DEBUG
-                print("temp directory path\(tempURL)")
-                #endif
-                return tempURL
             } catch {
-                return FileManager.default.temporaryDirectory.appendingPathComponent(pathComponent, isDirectory: true)
+                tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(pathComponent, isDirectory: true)
             }
-        } else {
-            #if DEBUG
-            print("temp directory path\(tempURL)")
-            #endif
-            return tempURL
         }
+        #if DEBUG
+        print("temp directory path \(tempURL)")
+        #endif
+        return tempURL
     }
     
     func isValidDirectory(atPath path: URL) -> Bool {
         var isDir : ObjCBool = false
-        if FileManager.default.fileExists(atPath: path.absoluteString, isDirectory:&isDir) {
+        if FileManager.default.fileExists(atPath: path.path, isDirectory:&isDir) {
             return isDir.boolValue
         } else {
             return false
