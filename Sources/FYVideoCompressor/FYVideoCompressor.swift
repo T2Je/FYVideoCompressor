@@ -191,10 +191,12 @@ public class FYVideoCompressor {
         print("ORIGINAL:")
         print("video size: \(url.sizePerMB())M")
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
+        print("fps: \(videoTrack.nominalFrameRate)") //
         print("scale size: \(videoTrack.naturalSize)")
                 
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
+        print("fps: \(quality.value.fps)")
         print("scale size: (\(scaleSize))")
         
         print("****************************************")
@@ -266,6 +268,7 @@ public class FYVideoCompressor {
         } else {
             _outputPath = FileManager.tempDirectory(with: "CompressedVideo")
         }
+        
 #if DEBUG
         print("************** Video info **************")
         
@@ -273,10 +276,12 @@ public class FYVideoCompressor {
         print("ORIGINAL:")
         print("video size: \(url.sizePerMB())M")
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
+        print("fps: \(videoTrack.nominalFrameRate)") //
         print("scale size: \(videoTrack.naturalSize)")
         
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
+        print("fps: \(config.fps)")
         print("scale size: (\(targetSize))")
         print("****************************************")
 #endif

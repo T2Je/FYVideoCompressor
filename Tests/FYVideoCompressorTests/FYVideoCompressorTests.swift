@@ -10,8 +10,8 @@ final class FYVideoCompressorTests: XCTestCase {
     // https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4
 //    static let testVideoURL = URL(string: "https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4")! // video size 5.3M
     
-    static let testVideoURL = URL(string: "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mov-file.mov")!
-    
+//    static let testVideoURL = URL(string: "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mov-file.mov")!
+    static let testVideoURL = URL(string: "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-for-Testing.mp4")!
     let sampleVideoPath: URL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("sample.mp4")
     var compressedVideoPath: URL?
     
