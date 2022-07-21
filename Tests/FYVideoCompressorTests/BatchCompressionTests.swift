@@ -25,7 +25,7 @@ class BatchCompressionTests: XCTestCase {
     func setupSampleVideoPath() {
         sampleVideoURLs.forEach { urlStr in
             if let url = URL(string: urlStr) {
-                sampleVideoPath[url] = try! FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("\(url.lastPathComponent)")
+                sampleVideoPath[url] = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("\(url.lastPathComponent)")
             }
         }
     }
@@ -113,7 +113,7 @@ class BatchCompressionTests: XCTestCase {
         if let path = sampleVideoPath[url] {
             sampleVideoCachedURL = path
         } else {
-            sampleVideoCachedURL = try! FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("\(url.lastPathComponent)")
+            sampleVideoCachedURL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("\(url.lastPathComponent)")
             sampleVideoPath[url] = sampleVideoCachedURL
         }
         if FileManager.default.fileExists(atPath: sampleVideoCachedURL.absoluteString) {

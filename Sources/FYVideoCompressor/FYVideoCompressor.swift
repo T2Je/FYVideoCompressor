@@ -8,6 +8,7 @@ public class FYVideoCompressor {
     public enum VideoCompressorError: Error, LocalizedError {
         case noVideo
         case compressedFailed(_ error: Error)
+        case outputPathNotValid(_ path: URL)
         
         public var errorDescription: String? {
             switch self {
@@ -15,6 +16,8 @@ public class FYVideoCompressor {
                 return "No video"
             case .compressedFailed(let error):
                 return error.localizedDescription
+            case .outputPathNotValid(let path):
+                return "Output path is invalid: \(path)"
             }
         }
     }
@@ -92,6 +95,11 @@ public class FYVideoCompressor {
         ///    e.g CGSize(width: 320, height: -1)
         public var scale: CGSize?
         
+        ///  compressed video will be moved to this path. If no value is set, `FYVideoCompressor` will create it for you.
+        ///  Default is nil.
+        public var outputPath: URL?
+        
+        
         public init() {
             self.videoBitrate = 1000_000
             self.videomaxKeyFrameInterval = 10
@@ -100,6 +108,7 @@ public class FYVideoCompressor {
             self.audioBitrate = 128_000
             self.fileType = .mp4
             self.scale = nil
+            self.outputPath = nil
         }
         
         public init(videoBitrate: Int = 1000_000,
@@ -108,7 +117,8 @@ public class FYVideoCompressor {
                     audioSampleRate: Int = 44100,
                     audioBitrate: Int = 128_000,
                     fileType: AVFileType = .mp4,
-                    scale: CGSize? = nil) {
+                    scale: CGSize? = nil,
+                    outputPath: URL? = nil) {
             self.videoBitrate = videoBitrate
             self.videomaxKeyFrameInterval = videomaxKeyFrameInterval
             self.fps = fps
@@ -116,6 +126,7 @@ public class FYVideoCompressor {
             self.audioBitrate = audioBitrate
             self.fileType = fileType
             self.scale = scale
+            self.outputPath = outputPath
         }
     }
     
@@ -129,15 +140,21 @@ public class FYVideoCompressor {
     @available(*, deprecated, renamed: "init()", message: "In the case of batch compression, singleton causes a crash, be sure to use init method - init()")
     static public let shared: FYVideoCompressor = FYVideoCompressor()
     
-    public init() {
-    }
+    public init() { }
     
     /// Youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
     /// Custom quality will not be affected by this value.
     static public var minimumVideoBitrate = 1000 * 200
     
     /// Compress Video with quality.
-    public func compressVideo(_ url: URL, quality: VideoQuality = .mediumQuality, completion: @escaping (Result<URL, Error>) -> Void) {
+    
+    /// Compress Video with quality.
+    /// - Parameters:
+    ///   - url: path of the video that needs to be compressed
+    ///   - quality: the quality of the output video. Default is mediumQuality.
+    ///   - outputPath: compressed video will be moved to this path. If no value is set, `FYVideoCompressor` will create it for you. Default is nil.
+    ///   - completion: completion block
+    public func compressVideo(_ url: URL, quality: VideoQuality = .mediumQuality, outputPath: URL? = nil, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: url)
         // setup
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -181,7 +198,21 @@ public class FYVideoCompressor {
         print("size: (\(scaleSize))")
         print("Original video size: \(url.sizePerMB())M")
 #endif
-        _compress(asset: asset, fileType: .mp4, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: quality.value.fps, completion: completion)
+        var _outputPath: URL
+        if let outputPath = outputPath {
+            _outputPath = outputPath
+        } else {
+            _outputPath = FileManager.tempDirectory(with: "CompressedVideo")
+        }
+        _compress(asset: asset,
+                  fileType: .mp4,
+                  videoTrack,
+                  videoSettings,
+                  audioTrack,
+                  audioSettings,
+                  targetFPS: quality.value.fps,
+                  outputPath: _outputPath,
+                  completion: completion)
     }
     
     /// Compress Video with config.
@@ -228,6 +259,12 @@ public class FYVideoCompressor {
             audioSettings = createAudioSettingsWithAudioTrack(adTrack, bitrate: targetAudioBitrate, sampleRate: targetSampleRate)
         }
         
+        var _outputPath: URL
+        if let outputPath = config.outputPath {
+            _outputPath = outputPath
+        } else {
+            _outputPath = FileManager.tempDirectory(with: "CompressedVideo")
+        }
 #if DEBUG
         print("Original video size: \(url.sizePerMB())M")
         print("########## Video ##########")
@@ -241,19 +278,53 @@ public class FYVideoCompressor {
         print("size: (\(targetSize))")
 #endif
 
-        _compress(asset: asset, fileType: config.fileType, videoTrack, videoSettings, audioTrack, audioSettings, targetFPS: config.fps, completion: completion)
+        _compress(asset: asset,
+                  fileType: config.fileType,
+                  videoTrack,
+                  videoSettings,
+                  audioTrack,
+                  audioSettings,
+                  targetFPS: config.fps,
+                  outputPath: _outputPath,
+                  completion: completion)
     }
     
     /// Remove all cached compressed videos
     public func removeAllCompressedVideo() {
-        compressVideoPaths.forEach {
-            try? FileManager.default.removeItem(at: $0)
+        var candidates = [Int]()
+        for index in 0..<compressVideoPaths.count {
+            do {
+                try FileManager.default.removeItem(at: compressVideoPaths[index])
+                candidates.append(index)
+            } catch {
+                print("❌ remove compressed item error: \(error)")
+            }
         }
-        compressVideoPaths.removeAll()
+        
+        for candidate in candidates.reversed() {
+            compressVideoPaths.remove(at: candidate)
+        }
+    }
+    
+    func isDirectory(atPath path: URL) -> Bool {
+        var isDir : ObjCBool = false
+        if FileManager.default.fileExists(atPath: path.absoluteString, isDirectory:&isDir) {
+            return isDir.boolValue
+        } else {
+            return false
+        }
     }
     
     // MARK: - Private methods
-    private func _compress(asset: AVAsset, fileType: AVFileType, _ videoTrack: AVAssetTrack, _ videoSettings: [String: Any], _ audioTrack: AVAssetTrack?, _ audioSettings: [String: Any]?, targetFPS: Float, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func _compress(asset: AVAsset,
+                           fileType: AVFileType,
+                           _ videoTrack: AVAssetTrack,
+                           _ videoSettings: [String: Any],
+                           _ audioTrack: AVAssetTrack?,
+                           _ audioSettings: [String: Any]?,
+                           targetFPS: Float,
+                           outputPath: URL,
+                           completion: @escaping (Result<URL, Error>) -> Void) {
         // video
         let videoOutput = AVAssetReaderTrackOutput.init(track: videoTrack,
                                                         outputSettings: [kCVPixelBufferPixelFormatTypeKey as String:
@@ -261,15 +332,20 @@ public class FYVideoCompressor {
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.transform = videoTrack.preferredTransform // fix output video orientation
         do {
-            var outputURL = try FileManager.tempDirectory(with: "CompressedVideo")
+            guard FileManager.default.isValidDirectory(atPath: outputPath) else {
+                completion(.failure(VideoCompressorError.outputPathNotValid(outputPath)))
+                return
+            } 
+            
+            var outputPath = outputPath
             let videoName = UUID().uuidString + ".\(fileType.fileExtension)"
-            outputURL.appendPathComponent("\(videoName)")
+            outputPath.appendPathComponent("\(videoName)")
             
             // store urls for deleting
-            compressVideoPaths.append(outputURL)
+            compressVideoPaths.append(outputPath)
             
             let reader = try AVAssetReader(asset: asset)
-            let writer = try AVAssetWriter(url: outputURL, fileType: fileType)
+            let writer = try AVAssetWriter(url: outputPath, fileType: fileType)
             self.reader = reader
             self.writer = writer
             
@@ -352,10 +428,10 @@ public class FYVideoCompressor {
                         let endTime = Date()
                         let elapse = endTime.timeIntervalSince(startTime)
                         print("compression time: \(elapse)")
-                        print("compressed video size: \(outputURL.sizePerMB())M")
+                        print("compressed video size: \(outputPath.sizePerMB())M")
 #endif
                         DispatchQueue.main.sync {
-                            completion(.success(outputURL))
+                            completion(.success(outputPath))
                         }
                     }
                 default:
