@@ -8,10 +8,10 @@
 import Foundation
 
 extension FileManager {
-    public enum CreateTempDirectoryError: Error, LocalizedError {
+    enum CreateTempDirectoryError: Error, LocalizedError {
         case fileExsisted
 
-        public var errorDescription: String? {
+        var errorDescription: String? {
             switch self {
             case .fileExsisted:
                 return "File exsisted"
@@ -23,7 +23,7 @@ extension FileManager {
     /// - Throws: error when create temp directory.
     /// - Returns: temp directory location.
     /// - Warning: Every time you call this function will return a different directory.
-    public static func tempDirectory(with pathComponent: String = ProcessInfo.processInfo.globallyUniqueString) -> URL {
+    static func tempDirectory(with pathComponent: String = ProcessInfo.processInfo.globallyUniqueString) -> URL {
         var tempURL: URL
 
         // Only the volume(卷) of cache url is used.
