@@ -6,7 +6,7 @@
 //
 
 import XCTest
-import FYVideoCompressor
+@testable import FYVideoCompressor
 
 class BatchCompressionTests: XCTestCase {
 
