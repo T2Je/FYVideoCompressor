@@ -1,5 +1,7 @@
 import Foundation
 import AVFoundation
+import CoreMedia
+
 // sample video https://download.blender.org/demo/movies/BBB/
 
 /// A high-performance, flexible and easy to use Video compressor library written by Swift.
@@ -161,10 +163,13 @@ public class FYVideoCompressor {
             completion(.failure(VideoCompressorError.noVideo))
             return
         }
+        
+        print("video codec type: \(videoCodecType(for: videoTrack))")
+        
         // --- Video ---
         // video bit rate
         let targetVideoBitrate = getVideoBitrateWithQuality(quality, originalBitrate: videoTrack.estimatedDataRate)
-                
+        
         // scale size
         let scaleSize = calculateSizeWithQuality(quality, originalSize: videoTrack.naturalSize)
         
@@ -193,7 +198,7 @@ public class FYVideoCompressor {
         print("bitrate: \(videoTrack.estimatedDataRate) b/s")
         print("fps: \(videoTrack.nominalFrameRate)") //
         print("scale size: \(videoTrack.naturalSize)")
-                
+        
         print("TARGET:")
         print("video bitrate: \(targetVideoBitrate) b/s")
         print("fps: \(quality.value.fps)")
@@ -226,6 +231,10 @@ public class FYVideoCompressor {
             completion(.failure(VideoCompressorError.noVideo))
             return
         }
+        
+#if DEBUG
+        print("video codec type: \(videoCodecType(for: videoTrack))")
+#endif
         let targetVideoBitrate: Float
         if Float(config.videoBitrate) > videoTrack.estimatedDataRate {
             let tempBitrate = videoTrack.estimatedDataRate/4
@@ -285,7 +294,7 @@ public class FYVideoCompressor {
         print("scale size: (\(targetSize))")
         print("****************************************")
 #endif
-
+        
         _compress(asset: asset,
                   fileType: config.fileType,
                   videoTrack,
@@ -334,7 +343,7 @@ public class FYVideoCompressor {
             guard FileManager.default.isValidDirectory(atPath: outputPath) else {
                 completion(.failure(VideoCompressorError.outputPathNotValid(outputPath)))
                 return
-            } 
+            }
             
             var outputPath = outputPath
             let videoName = UUID().uuidString + ".\(fileType.fileExtension)"
@@ -387,34 +396,24 @@ public class FYVideoCompressor {
             group.enter()
             
             let reduceFPS = targetFPS < videoTrack.nominalFrameRate
-            if reduceFPS {
-                outputVideoDataByReducingFPS(originFPS: videoTrack.nominalFrameRate,
-                                             targetFPS: targetFPS,
-                                             videoInput: videoInput,
-                                             videoOutput: videoOutput,
-                                             duration: videoTrack.asset!.duration) {
-                    self.group.leave()
-                }
-            } else {
-                outputVideoData(videoInput, videoOutput: videoOutput) {
-                    self.group.leave()
-                }
+            
+            let frameIndexArr = getFrameIndexesWith(originalFPS: videoTrack.nominalFrameRate,
+                                                    targetFPS: targetFPS,
+                                                    duration: Float(videoTrack.asset?.duration.seconds ?? 0.0))
+            
+            outputVideoDataByReducingFPS(videoInput: videoInput,
+                                         videoOutput: videoOutput,
+                                         frameIndexArr: reduceFPS ? frameIndexArr : []) {
+                self.group.leave()
             }
+            
             
             // output audio
             if let realAudioInput = audioInput, let realAudioOutput = audioOutput {
                 group.enter()
-                realAudioInput.requestMediaDataWhenReady(on: audioCompressQueue) {
-                    while realAudioInput.isReadyForMoreMediaData {
-                        if let buffer = realAudioOutput.copyNextSampleBuffer() {
-                            realAudioInput.append(buffer)
-                        } else {
-                            //                            print("finish audio appending")
-                            realAudioInput.markAsFinished()
-                            self.group.leave()
-                            break
-                        }
-                    }
+                // todo: drop audio sample buffer
+                outputAudioData(realAudioInput, audioOutput: realAudioOutput, frameIndexArr: []) {
+                    self.group.leave()
                 }
             }
             
@@ -428,7 +427,7 @@ public class FYVideoCompressor {
                         let elapse = endTime.timeIntervalSince(startTime)
                         print("****************************************")
                         print("compression time: \(elapse)")
-                        print("compressed video size: \(outputPath.sizePerMB())M")
+                        print("compressed video path: \(outputPath), size: \(outputPath.sizePerMB())M")
                         print("****************************************")
 #endif
                         DispatchQueue.main.sync {
@@ -474,7 +473,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             print("TARGET:")
             print("bitrate: \(bitrate)")
             print("sampleRate: \(sampleRate)")
-            print("channels: \(2)")
+//            print("channels: \(2)")
             print("formatID: \(kAudioFormatMPEG4AAC)")
         }
 #endif
@@ -492,50 +491,34 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         ]
     }
     
-    private func outputVideoDataByReducingFPS(originFPS: Float,
-                                              targetFPS: Float,
-                                              videoInput: AVAssetWriterInput,
+    private func outputVideoDataByReducingFPS(videoInput: AVAssetWriterInput,
                                               videoOutput: AVAssetReaderTrackOutput,
-                                              duration: CMTime,
+                                              frameIndexArr: [Int],
                                               completion: @escaping(() -> Void)) {
-        let randomFrames = getFrameIndexesWith(originalFPS: originFPS, targetFPS: targetFPS, duration: Float(duration.seconds))
         var counter = 0
         var index = 0
         
         videoInput.requestMediaDataWhenReady(on: videoCompressQueue) {
             while videoInput.isReadyForMoreMediaData {
                 if let buffer = videoOutput.copyNextSampleBuffer() {
-                    // append first frame
-                    if index < randomFrames.count {
-                        let frameIndex = randomFrames[index]
-                        if counter == frameIndex {
-                            index += 1
-                            let timingInfo = UnsafeMutablePointer<CMSampleTimingInfo>.allocate(capacity: 1)
-                            let newSample = UnsafeMutablePointer<CMSampleBuffer?>.allocate(capacity: 1)
-                            
-                            // Should check call succeeded
-                            CMSampleBufferGetSampleTimingInfo(buffer, at: 0, timingInfoOut: timingInfo)
-                            
-                            // timingInfo.pointee.duration is 0
-                            timingInfo.pointee.duration = CMTimeMultiplyByFloat64(timingInfo.pointee.duration, multiplier: Float64(originFPS/targetFPS))
-                            
-                            // Again, should check call succeeded
-                            CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer, sampleTimingEntryCount: 1, sampleTimingArray: timingInfo, sampleBufferOut: newSample)
-                            if let newSamplePointee = newSample.pointee {
-                                videoInput.append(newSamplePointee)
+                    if frameIndexArr.isEmpty {
+                        videoInput.append(buffer)
+                    } else { // reduce FPS
+                        // append first frame
+                        if index < frameIndexArr.count {
+                            let frameIndex = frameIndexArr[index]
+                            if counter == frameIndex {
+                                index += 1
+                                videoInput.append(buffer)
                             }
-                            // deinit
-                            newSample.deinitialize(count: 1)
-                            newSample.deallocate()
-                            timingInfo.deinitialize(count: 1)
-                            timingInfo.deallocate()
+                            counter += 1
+                        } else {
+                            // Drop this frame
+                            CMSampleBufferInvalidate(buffer)
                         }
-                        counter += 1
-                    } else {
-                        break
                     }
+                    
                 } else {
-//                    print("counter: \(counter)")
                     videoInput.markAsFinished()
                     completion()
                     break
@@ -544,16 +527,38 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         }
     }
     
-    func outputVideoData(_ videoInput: AVAssetWriterInput,
-                         videoOutput: AVAssetReaderTrackOutput,
-                         completion: @escaping(() -> Void)) {
-        // Loop Video Frames
-        videoInput.requestMediaDataWhenReady(on: videoCompressQueue) {
-            while videoInput.isReadyForMoreMediaData {
-                if let vBuffer = videoOutput.copyNextSampleBuffer(), CMSampleBufferDataIsReady(vBuffer) {
-                    videoInput.append(vBuffer)
-                } else {
-                    videoInput.markAsFinished()
+    private func outputAudioData(_ audioInput: AVAssetWriterInput,
+                                 audioOutput: AVAssetReaderTrackOutput,
+                                 frameIndexArr: [Int],
+                                 completion:  @escaping(() -> Void)) {
+        
+        var counter = 0
+        var index = 0
+        
+        audioInput.requestMediaDataWhenReady(on: audioCompressQueue) {
+            while audioInput.isReadyForMoreMediaData {
+                if let buffer = audioOutput.copyNextSampleBuffer() {
+                    
+                    if frameIndexArr.isEmpty {
+                        audioInput.append(buffer)
+                        counter += 1
+                    } else {
+                        // append first frame
+                        if index < frameIndexArr.count {
+                            let frameIndex = frameIndexArr[index]
+                            if counter == frameIndex {
+                                index += 1
+                                audioInput.append(buffer)
+                            }
+                            counter += 1
+                        } else {
+                            // Drop this frame
+                            CMSampleBufferInvalidate(buffer)
+                        }
+                    }
+                    
+                } else {                    
+                    audioInput.markAsFinished()
                     completion()
                     break
                 }
@@ -656,19 +661,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         }
         
         var randomFrames = Array(repeating: 0, count: rangeArr.count)
-
-#if DEBUG
-//        defer {
-//            print("originFrames: \(originalFrames)")
-//            print("targetFrames: \(targetFrames)")
-//
-//            print("range arr: \(rangeArr)")
-//            print("range arr count: \(rangeArr.count)")
-//
-//            print("randomFrames: \(randomFrames)")
-//            print("randomFrames count: \(randomFrames.count)")
-//        }
-#endif
+        
         guard !randomFrames.isEmpty else {
             return []
         }
@@ -685,5 +678,34 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
             randomFrames[index] = res
         }
         return randomFrames
+    }
+    
+    private func videoCodecType(for videoTrack: AVAssetTrack) -> String {
+        let res = videoTrack.formatDescriptions
+            .map { CMFormatDescriptionGetMediaSubType($0 as! CMFormatDescription).toString() }
+        return res.first ?? "unknown codec type"
+    }
+    
+    private func isKeyFrame(sampleBuffer: CMSampleBuffer) -> Bool {
+        guard let attachmentArray = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true) else {
+            return false
+        }
+        
+        let attachmentCount = CFArrayGetCount(attachmentArray)
+        if attachmentCount == 0 {
+            return true // Assume keyframe if no attachments are present
+        }
+        
+        let attachment = unsafeBitCast(
+            CFArrayGetValueAtIndex(attachmentArray, 0),
+            to: CFDictionary.self
+        )
+        
+        if let dependsOnOthers = CFDictionaryGetValue(attachment, Unmanaged.passUnretained(kCMSampleAttachmentKey_DependsOnOthers).toOpaque()) {
+            let value = Unmanaged<CFBoolean>.fromOpaque(dependsOnOthers).takeUnretainedValue()
+            return !CFBooleanGetValue(value)
+        } else {
+            return true // Assume keyframe if attachment is not present
+        }
     }
 }

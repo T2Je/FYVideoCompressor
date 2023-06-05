@@ -7,11 +7,15 @@ final class FYVideoCompressorTests: XCTestCase {
     // https://www.learningcontainer.com/mp4-sample-video-files-download/#Sample_MP4_Video_File_Download_for_Testing
     
     // http://clips.vorwaerts-gmbh.de/VfE_html5.mp4  5.3
-    // https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4
-//    static let testVideoURL = URL(string: "https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4")! // video size 5.3M
+    static let testVideoURL = URL(string: "https://file-examples.com/storage/fe92e8a57762aaf72faee17/2017/04/file_example_MP4_1280_10MG.mp4")! // video size 5.3M
     
 //    static let testVideoURL = URL(string: "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mov-file.mov")!
-    static let testVideoURL = URL(string: "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-for-Testing.mp4")!
+
+// https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-for-Testing.mp4
+//    static let testVideoURL = URL(string: "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-for-Testing.mp4")!
+    
+//    let localVideoURL = Bundle.module.url(forResource: "sample2", withExtension: "MOV")!
+    
     let sampleVideoPath: URL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("sample.mp4")
     var compressedVideoPath: URL?
     
@@ -40,10 +44,11 @@ final class FYVideoCompressorTests: XCTestCase {
     
     override func tearDownWithError() throws {
         task?.cancel()
-        try? FileManager.default.removeItem(at: sampleVideoPath)
-        if let compressedVideoPath = compressedVideoPath {
-            try FileManager.default.removeItem(at: compressedVideoPath)
-        }
+        
+//        try? FileManager.default.removeItem(at: sampleVideoPath)
+//        if let compressedVideoPath = compressedVideoPath {
+//            try FileManager.default.removeItem(at: compressedVideoPath)
+//        }
     }
     
     func testAVFileTypeExtension() {
@@ -61,7 +66,8 @@ final class FYVideoCompressorTests: XCTestCase {
     
     func testCompressVideo() {
         let expectation = XCTestExpectation(description: "compress video")
-                        
+        
+//        var sampleVideoPath = localVideoURL // sampleVideoPath
         compressor.compressVideo(sampleVideoPath, quality: .lowQuality) { result in
             switch result {
             case .success(let video):
@@ -73,7 +79,7 @@ final class FYVideoCompressorTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        XCTAssertTrue(sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
     }
     
     func testCompressVideoWithScale() {

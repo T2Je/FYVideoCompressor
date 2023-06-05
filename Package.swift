@@ -27,6 +27,7 @@ let package = Package(
             dependencies: []),
         .testTarget(
             name: "FYVideoCompressorTests",
-            dependencies: ["FYVideoCompressor"]),
+            dependencies: ["FYVideoCompressor"],
+            resources: []),
     ]
 )
