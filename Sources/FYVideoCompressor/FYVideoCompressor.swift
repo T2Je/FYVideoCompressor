@@ -142,6 +142,8 @@ public class FYVideoCompressor {
     @available(*, deprecated, renamed: "init()", message: "In the case of batch compression, singleton causes a crash, be sure to use init method - init()")
     static public let shared: FYVideoCompressor = FYVideoCompressor()
     
+    public var videoFrameReducer: VideoFrameReducer!
+    
     public init() { }
     
     /// Youtube suggests 1Mbps for 24 frame rate 360p video, 1Mbps = 1000_000bps.
@@ -155,8 +157,14 @@ public class FYVideoCompressor {
     ///   - url: path of the video that needs to be compressed
     ///   - quality: the quality of the output video. Default is mediumQuality.
     ///   - outputPath: compressed video will be moved to this path. If no value is set, `FYVideoCompressor` will create it for you. Default is nil.
+    ///   - frameReducer: video frame reducer to reduce fps of the video.
     ///   - completion: completion block
-    public func compressVideo(_ url: URL, quality: VideoQuality = .mediumQuality, outputPath: URL? = nil, completion: @escaping (Result<URL, Error>) -> Void) {
+    public func compressVideo(_ url: URL,
+                              quality: VideoQuality = .mediumQuality,
+                              outputPath: URL? = nil,
+                              frameReducer: VideoFrameReducer = ReduceFrameEvenlySpaced(),
+                              completion: @escaping (Result<URL, Error>) -> Void) {
+        self.videoFrameReducer = frameReducer
         let asset = AVAsset(url: url)
         // setup
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -224,7 +232,9 @@ public class FYVideoCompressor {
     }
     
     /// Compress Video with config.
-    public func compressVideo(_ url: URL, config: CompressionConfig, completion: @escaping (Result<URL, Error>) -> Void) {
+    public func compressVideo(_ url: URL, config: CompressionConfig, frameReducer: VideoFrameReducer = ReduceFrameEvenlySpaced(), completion: @escaping (Result<URL, Error>) -> Void) {
+        self.videoFrameReducer = frameReducer
+        
         let asset = AVAsset(url: url)
         // setup
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -397,9 +407,9 @@ public class FYVideoCompressor {
             
             let reduceFPS = targetFPS < videoTrack.nominalFrameRate
             
-            let frameIndexArr = getFrameIndexesWith(originalFPS: videoTrack.nominalFrameRate,
-                                                    targetFPS: targetFPS,
-                                                    duration: Float(videoTrack.asset?.duration.seconds ?? 0.0))
+            let frameIndexArr = videoFrameReducer.reduce(originalFPS: videoTrack.nominalFrameRate,
+                                                         to: targetFPS,
+                                                         with: Float(videoTrack.asset?.duration.seconds ?? 0.0))
             
             outputVideoDataByReducingFPS(videoInput: videoInput,
                                          videoOutput: videoOutput,
@@ -425,10 +435,12 @@ public class FYVideoCompressor {
 #if DEBUG
                         let endTime = Date()
                         let elapse = endTime.timeIntervalSince(startTime)
-                        print("****************************************")
-                        print("compression time: \(elapse)")
-                        print("compressed video path: \(outputPath), size: \(outputPath.sizePerMB())M")
-                        print("****************************************")
+                        print("******** Compression finished ✅**********")
+                        print("Compressed video:")
+                        print("time: \(elapse)")
+                        print("size: \(outputPath.sizePerMB())M")
+                        print("path: \(outputPath)")
+                        print("******************************************")
 #endif
                         DispatchQueue.main.sync {
                             completion(.success(outputPath))
@@ -557,7 +569,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                         }
                     }
                     
-                } else {                    
+                } else {
                     audioInput.markAsFinished()
                     completion()
                     break
@@ -652,7 +664,7 @@ AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
         assert(originalFPS > 0)
         assert(targetFPS > 0)
         let originalFrames = Int(originalFPS * duration)
-        let targetFrames = Int(ceil(Float(originalFrames) * targetFPS / originalFPS))
+        let targetFrames = Int(duration * targetFPS)
         
         //
         var rangeArr = Array(repeating: 0, count: targetFrames)
