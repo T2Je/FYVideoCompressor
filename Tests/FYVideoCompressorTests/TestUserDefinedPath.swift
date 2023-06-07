@@ -13,13 +13,15 @@ class TestUserDefinedPath: XCTestCase {
     
     let sampleVideoPath: URL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("sample.mp4")
     
-    var compressedVideoPath: URL! = URL(fileURLWithPath: "ssssss")
+    var compressedVideoPath: URL!
     
     var task: URLSessionDataTask?
     
     let compressor = FYVideoCompressor()
     
     override func setUpWithError() throws {
+        compressedVideoPath = createCustomDirectory()
+        
         let expectation = XCTestExpectation(description: "video cache downloading remote video")
         var error: Error?
         downloadSampleVideo { result in
@@ -125,4 +127,17 @@ class TestUserDefinedPath: XCTestCase {
         self.task = task
     }
 
+    func createCustomDirectory() -> URL? {
+        let fileManager = FileManager.default
+        let documentsDirectory = try! fileManager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        let directoryURL = documentsDirectory.appendingPathComponent("MyDirectory")
+
+        do {
+            try fileManager.createDirectory(atPath: directoryURL.path, withIntermediateDirectories: true, attributes: nil)
+            return directoryURL
+        } catch {
+            print(error.localizedDescription)
+            return nil
+        }
+    }
 }
