@@ -17,7 +17,8 @@ final class FYVideoCompressorTests: XCTestCase {
 //    let localVideoURL = Bundle.module.url(forResource: "sample2", withExtension: "MOV")!
     
     let sampleVideoPath: URL = FileManager.tempDirectory(with: "UnitTestSampleVideo").appendingPathComponent("sample.mp4")
-    var compressedVideoPath: URL?
+//    var compressedVideoPath: URL?
+    var compressedVideoPaths: [URL] = []
     
     var task: URLSessionDataTask?
     
@@ -45,9 +46,10 @@ final class FYVideoCompressorTests: XCTestCase {
     override func tearDownWithError() throws {
         task?.cancel()
         
-        try? FileManager.default.removeItem(at: sampleVideoPath)
-        if let compressedVideoPath = compressedVideoPath {
-            try FileManager.default.removeItem(at: compressedVideoPath)
+        try FileManager.default.removeItem(at: sampleVideoPath)
+        
+        for path in compressedVideoPaths {
+            try FileManager.default.removeItem(at: path)
         }
     }
     
@@ -68,10 +70,11 @@ final class FYVideoCompressorTests: XCTestCase {
         let expectation = XCTestExpectation(description: "compress video")
         
 //        var sampleVideoPath = localVideoURL // sampleVideoPath
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, quality: .lowQuality, frameReducer: ReduceFrameRandomly()) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -79,16 +82,19 @@ final class FYVideoCompressorTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithScale() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(scale: CGSize(width: -1, height: -1))
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -97,16 +103,19 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithVideoBitrate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(videoBitrate: 200_000)
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -115,16 +124,19 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithVideomaxKeyFrameInterval() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(videomaxKeyFrameInterval: 1)
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -133,16 +145,20 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithFPS() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(fps: 24)
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -151,16 +167,20 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithAudioSampleRate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(audioSampleRate: 44100)
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -169,16 +189,19 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testCompressVideoWithAudioBitrate() {
         let expectation = XCTestExpectation(description: "compress video")
         let config = FYVideoCompressor.CompressionConfig(audioBitrate: 128000)
+        
+        var compressedVideoPath: URL!
         compressor.compressVideo(sampleVideoPath, config: config) { result in
             switch result {
             case .success(let video):
-                self.compressedVideoPath = video
+                compressedVideoPath = video
                 expectation.fulfill()
             case .failure(let error):
                 XCTFail(error.localizedDescription)
@@ -187,7 +210,8 @@ final class FYVideoCompressorTests: XCTestCase {
         
         wait(for: [expectation], timeout: 30)
         XCTAssertNotNil(compressedVideoPath)
-        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath!.sizePerMB())
+        compressedVideoPaths.append(compressedVideoPath)
+        XCTAssertTrue(self.sampleVideoPath.sizePerMB() > compressedVideoPath.sizePerMB())
     }
     
     func testTargetVideoSizeWithQuality() {

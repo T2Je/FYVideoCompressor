@@ -18,7 +18,7 @@ public protocol VideoFrameReducer {
     func reduce(originalFPS: Float, to targetFPS: Float, with videoDuration: Float) -> [Int]
 }
 
-
+/// Get frame index array evenly spaced
 public struct ReduceFrameEvenlySpaced: VideoFrameReducer {
     public init() {}
     
@@ -41,6 +41,7 @@ public struct ReduceFrameEvenlySpaced: VideoFrameReducer {
     }
 }
 
+/// Get frame index array random in a every region
 public struct ReduceFrameRandomly: VideoFrameReducer {
     public init() {}
     
